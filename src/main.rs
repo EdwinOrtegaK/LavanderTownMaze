@@ -12,6 +12,8 @@ use nalgebra as na;
 use textures::Texture;
 use once_cell::sync::Lazy;
 use std::sync::Arc;
+use rusttype::{Font, Scale};
+use std::time::Instant;
 
 const WIDTH: usize = 1040;
 const HEIGHT: usize = 900;
@@ -37,6 +39,37 @@ fn render_sky(framebuffer: &mut Vec<u32>) {
             let ty = (y as f32 / (HEIGHT / 2) as f32 * SKY.height as f32) as u32;
             let color = SKY.get_pixel_color(tx, ty);
             framebuffer[y * WIDTH + x] = color;
+        }
+    }
+}
+
+fn render_text(framebuffer: &mut Vec<u32>, text: &str, x: usize, y: usize, scale: Scale, color: u32) {
+    let font_data = include_bytes!("../assets/PressStart2P.ttf");
+    let font = Font::try_from_bytes(font_data as &[u8]).unwrap();
+
+    let v_metrics = font.v_metrics(scale);
+
+    let glyphs: Vec<_> = font
+        .layout(text, scale, rusttype::point(x as f32, y as f32 + v_metrics.ascent))
+        .collect();
+
+    for glyph in glyphs {
+        if let Some(bb) = glyph.pixel_bounding_box() {
+            glyph.draw(|gx, gy, gv| {
+                let px = (gx as i32 + bb.min.x) as usize;
+                let py = (gy as i32 + bb.min.y) as usize;
+
+                if px < WIDTH && py < HEIGHT {
+                    let alpha = (gv * 255.0) as u32;
+                    let foreground = if alpha > 128 {
+                        color & 0xFFFFFF
+                    } else {
+                        framebuffer[py * WIDTH + px]
+                    };
+
+                    framebuffer[py * WIDTH + px] = foreground;
+                }
+            });
         }
     }
 }
@@ -121,7 +154,7 @@ fn render_minimap(framebuffer: &mut Vec<u32>, maze: &Vec<Vec<char>>, player: &Pl
         }
     }
 
-    // Dibujar los enemigos en el minimapa
+    /* Dibujar los enemigos en el minimapa
     for enemy_pos in enemy_positions {
         let enemy_minimap_x = minimap_x_offset + (enemy_pos.x * minimap_scale as f32) as usize;
         let enemy_minimap_y = minimap_y_offset + (enemy_pos.y * minimap_scale as f32) as usize;
@@ -135,7 +168,7 @@ fn render_minimap(framebuffer: &mut Vec<u32>, maze: &Vec<Vec<char>>, player: &Pl
                 }
             }
         }
-    }
+    }*/
 }
 
 fn render_enemy(framebuffer: &mut Vec<u32>, player: &Player, pos: &na::Vector2<f32>, z_buffer: &mut [f32]) {
@@ -191,7 +224,6 @@ fn render_enemy(framebuffer: &mut Vec<u32>, player: &Player, pos: &na::Vector2<f
         z_buffer[screen_x as usize] = sprite_d;
     }
 }
-
 
 fn render_enemies(framebuffer: &mut Vec<u32>, player: &Player, z_buffer: &mut [f32]) {
     let enemies = vec![
@@ -332,7 +364,13 @@ fn main() {
 
     let mut mode = "3D";
 
+    let mut last_time = Instant::now();
+    let mut frame_count = 0;
+    let mut fps_text = String::new();
+
     while window.is_open() && !window.is_key_down(Key::Escape) {
+        let frame_start_time = Instant::now();
+
         process_events(&window, &mut player, &maze, block_size);
 
         // Limpiar el framebuffer
@@ -346,6 +384,25 @@ fn main() {
             render3d(&mut framebuffer, &maze, &player, block_size as f32, &mut z_buffer, &enemy_positions);
         }
 
+        // Calcular FPS
+        frame_count += 1;
+        let current_time = Instant::now();
+        let elapsed = current_time.duration_since(last_time);
+
+        if elapsed >= std::time::Duration::from_secs(1) {
+            let fps = frame_count as f64 / elapsed.as_secs_f64();
+            fps_text = format!("FPS: {:.0}", fps);
+            last_time = current_time;
+            frame_count = 0;
+        }
+
+        // Dibujar FPS en la esquina superior derecha
+        let scale = Scale::uniform(24.0);
+        let text_width = 200;
+        let fps_x = WIDTH.saturating_sub(text_width) - 10;
+        let fps_y = 10;
+        render_text(&mut framebuffer, &fps_text, fps_x, fps_y, scale, 0x000000);
+
         window
             .update_with_buffer(&framebuffer, WIDTH, HEIGHT).unwrap();
 
@@ -353,6 +410,13 @@ fn main() {
             mode = if mode == "2D" { "3D" } else { "2D" };
         }
 
-        std::thread::sleep(std::time::Duration::from_millis(16)); // Controla el frame rate
+        let frame_end_time = Instant::now();
+        let frame_duration_actual = frame_end_time.duration_since(frame_start_time);
+        if frame_duration_actual < std::time::Duration::from_millis(16) {
+            let sleep_duration = std::time::Duration::from_millis(16) - frame_duration_actual;
+            if sleep_duration > std::time::Duration::from_millis(0) {
+                std::thread::sleep(sleep_duration);
+            }
+        }
     }
 }
