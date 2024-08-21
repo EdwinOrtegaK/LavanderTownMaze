@@ -14,7 +14,7 @@ use textures::Texture;
 use once_cell::sync::Lazy;
 use std::sync::Arc;
 use rusttype::{Font, Scale};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use audio::AudioPlayer;
 
 const WIDTH: usize = 1040;
@@ -26,6 +26,7 @@ static FLOOR: Lazy<Arc<Texture>> = Lazy::new(|| Arc::new(Texture::new("sprites/f
 static SKY: Lazy<Arc<Texture>> = Lazy::new(|| Arc::new(Texture::new("sprites/skySprite.png")));
 static CHARACTER: Lazy<Arc<Texture>> = Lazy::new(|| Arc::new(Texture::new("sprites/ghastSprite.jpg")));
 static POKE_CENTER: Lazy<Arc<Texture>> = Lazy::new(|| Arc::new(Texture::new("sprites/centroPoke.png")));
+static INTRO_SPRITE: Lazy<Arc<Texture>> = Lazy::new(|| Arc::new(Texture::new("sprites/introSprite.png")));
 
 fn cell_to_texture_color(wall_type: char, _is_vertical: bool, tx: f32, ty: f32) -> u32 {
     match wall_type {
@@ -241,6 +242,50 @@ fn render_enemies(framebuffer: &mut Vec<u32>, player: &Player, z_buffer: &mut [f
     }
 }
 
+fn render_welcome_screen(framebuffer: &mut Vec<u32>) {
+    // Cargar la imagen y calcular la escala para mantener la relación de aspecto
+    let intro_width = INTRO_SPRITE.width;
+    let intro_height = INTRO_SPRITE.height;
+
+    let scale_x = WIDTH as f32 / intro_width as f32;
+    let scale_y = HEIGHT as f32 / intro_height as f32;
+    let scale = scale_x.min(scale_y);
+
+    let scaled_width = (intro_width as f32 * scale) as usize;
+    let scaled_height = (intro_height as f32 * scale) as usize;
+
+    let offset_x = (WIDTH - scaled_width) / 2;
+    let mut offset_y = (HEIGHT - scaled_height) / 2;
+    offset_y -= 100;
+
+    for y in 0..scaled_height {
+        for x in 0..scaled_width {
+            let tx = (x as f32 / scaled_width as f32 * intro_width as f32) as u32;
+            let ty = (y as f32 / scaled_height as f32 * intro_height as f32) as u32;
+            let color = INTRO_SPRITE.get_pixel_color(tx, ty);
+            framebuffer[(y + offset_y) * WIDTH + (x + offset_x)] = color;
+        }
+    }
+
+    // Cambiar ajustes para las letras
+    let large_scale = Scale::uniform(30.0);
+    let small_scale = Scale::uniform(18.0);
+    let color = 0xFFD700;
+
+    let welcome_text = "Bienvenido al laberinto del";
+    let welcome_text2 = "       Pueblo Lavanda";
+    let start_text = "Presiona 'enter' para iniciar";
+    let controls_text = "    Controles: W, A, S, D";
+
+    let text_x = WIDTH / 2 - (welcome_text.len() as f32 * large_scale.x / 2.0) as usize;
+    render_text(framebuffer, welcome_text, text_x, offset_y + 20, large_scale, color);
+    render_text(framebuffer, welcome_text2, text_x, offset_y + 180, large_scale, color);
+
+    let small_text_x = WIDTH / 2 - (start_text.len() as f32 * small_scale.x / 2.0) as usize;
+    render_text(framebuffer, start_text, small_text_x, offset_y + 330, small_scale, color);
+    render_text(framebuffer, controls_text, small_text_x, offset_y + 360, small_scale, color);
+}
+
 fn render2d(framebuffer: &mut Vec<u32>, maze: &Vec<Vec<char>>, block_size: usize, player: &Player) {
     for (row, line) in maze.iter().enumerate() {
         for (col, &cell) in line.iter().enumerate() {
@@ -337,16 +382,6 @@ fn render3d(framebuffer: &mut Vec<u32>, maze: &Vec<Vec<char>>, player: &Player, 
 }
 
 fn main() {
-    // Crear el reproductor de música de fondo
-    let background_music = AudioPlayer::new("assets/Musica de Pueblo Lavanda.mp3").expect("Failed to initialize background music");
-
-    background_music.set_volume(0.2);
-
-    background_music.play();
-
-    // Crear el reproductor de efectos de sonido para los pasos
-    let steps_sound = AudioPlayer::new("assets/Efecto de Pasos.mp3").expect("Failed to initialize steps sound");
-
     let mut window = Window::new(
         "Maze",
         WIDTH,
@@ -357,6 +392,29 @@ fn main() {
         panic!("{}", e);
     });
 
+    let mut framebuffer: Vec<u32> = vec![0; WIDTH * HEIGHT];
+    let block_size = 80;
+
+    // Render the welcome screen
+    render_welcome_screen(&mut framebuffer);
+    window.update_with_buffer(&framebuffer, WIDTH, HEIGHT).unwrap();
+
+    // Wait for the user to press Enter
+    while window.is_open() && !window.is_key_down(Key::Enter) {
+        window.update();
+        std::thread::sleep(Duration::from_millis(16));
+    }
+
+    // Crear el reproductor de música de fondo
+    let background_music = AudioPlayer::new("assets/Musica de Pueblo Lavanda.mp3").expect("Failed to initialize background music");
+
+    background_music.set_volume(0.2);
+
+    background_music.play();
+
+    // Crear el reproductor de efectos de sonido para los pasos
+    let steps_sound = AudioPlayer::new("assets/Efecto de Pasos.mp3").expect("Failed to initialize steps sound");
+
     let enemy_positions = vec![
         na::Vector2::new(2.0, 5.0),
         na::Vector2::new(11.0, 3.5),
@@ -365,9 +423,6 @@ fn main() {
     ];
 
     let maze = maze::load_maze("maze.txt");
-
-    let mut framebuffer: Vec<u32> = vec![0; WIDTH * HEIGHT];
-    let block_size = 80;
 
     let mut player = Player {
         pos: na::Vector2::new(1.5, 1.5),
@@ -386,11 +441,9 @@ fn main() {
 
         process_events(&window, &mut player, &maze, block_size, &steps_sound);
 
-        // Limpiar el framebuffer
         framebuffer.iter_mut().for_each(|pixel| *pixel = 0);
         let mut z_buffer: Vec<f32> = vec![std::f32::MAX; WIDTH];
 
-        // Renderizar según el modo
         if mode == "2D" {
             render2d(&mut framebuffer, &maze, block_size, &player);
         } else {
@@ -409,7 +462,6 @@ fn main() {
             frame_count = 0;
         }
 
-        // Dibujar FPS en la esquina superior derecha
         let scale = Scale::uniform(24.0);
         let text_width = 200;
         let fps_x = WIDTH.saturating_sub(text_width) - 10;
