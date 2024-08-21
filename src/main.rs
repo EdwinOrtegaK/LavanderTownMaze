@@ -352,7 +352,6 @@ fn render_success_screen(framebuffer: &mut Vec<u32>) {
     render_text(framebuffer, exit_text, exit_text_x as usize, offset_y + 550, medium_scale, color);
 }
 
-
 fn render2d(framebuffer: &mut Vec<u32>, maze: &Vec<Vec<char>>, block_size: usize, player: &Player) {
     for (row, line) in maze.iter().enumerate() {
         for (col, &cell) in line.iter().enumerate() {
@@ -504,7 +503,12 @@ fn main() {
     let mut fps_text = String::new();
 
     // Definir la posición del CentroPokemon (meta)
-    let goal_position = na::Vector2::new(5.0, 5.0);
+    let goal_area = vec![
+        na::Vector2::new(11.0, 7.0),
+        na::Vector2::new(12.0, 7.0),
+        na::Vector2::new(11.0, 8.0),
+        na::Vector2::new(12.0, 8.0),
+    ];
     let mut game_completed = false;
 
     while window.is_open() && !window.is_key_down(Key::Escape) {
@@ -543,9 +547,12 @@ fn main() {
             render_text(&mut framebuffer, &fps_text, fps_x, fps_y, scale, 0x000000);
 
             // Verificar si el jugador ha alcanzado la meta
-            if (player.pos - goal_position).norm() < 0.5 {
-                println!("¡Meta alcanzada!");
-                game_completed = true;
+            for goal_position in &goal_area {
+                if (player.pos - *goal_position).norm() < 0.5 {
+                    game_completed = true;
+                    println!("¡Meta alcanzada!");
+                    break;
+                }
             }
 
             window.update_with_buffer(&framebuffer, WIDTH, HEIGHT).unwrap();
