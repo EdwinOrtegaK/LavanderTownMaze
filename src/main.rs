@@ -3,6 +3,7 @@ mod player;
 mod raycasting;
 mod controls;
 mod textures;
+mod audio;
 
 use player::Player;
 use raycasting::cast_ray;
@@ -14,6 +15,7 @@ use once_cell::sync::Lazy;
 use std::sync::Arc;
 use rusttype::{Font, Scale};
 use std::time::Instant;
+use audio::AudioPlayer;
 
 const WIDTH: usize = 1040;
 const HEIGHT: usize = 900;
@@ -334,6 +336,16 @@ fn render3d(framebuffer: &mut Vec<u32>, maze: &Vec<Vec<char>>, player: &Player, 
 }
 
 fn main() {
+    // Crear el reproductor de música de fondo
+    let background_music = AudioPlayer::new("assets/Musica de Pueblo Lavanda.mp3").expect("Failed to initialize background music");
+
+    background_music.set_volume(0.2);
+
+    background_music.play();
+
+    // Crear el reproductor de efectos de sonido para los pasos
+    let steps_sound = AudioPlayer::new("assets/Efecto de Pasos.mp3").expect("Failed to initialize steps sound");
+
     let mut window = Window::new(
         "Maze",
         WIDTH,
@@ -371,7 +383,7 @@ fn main() {
     while window.is_open() && !window.is_key_down(Key::Escape) {
         let frame_start_time = Instant::now();
 
-        process_events(&window, &mut player, &maze, block_size);
+        process_events(&window, &mut player, &maze, block_size, &steps_sound);
 
         // Limpiar el framebuffer
         framebuffer.iter_mut().for_each(|pixel| *pixel = 0);

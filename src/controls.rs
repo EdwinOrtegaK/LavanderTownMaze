@@ -1,30 +1,34 @@
 use minifb::{Key, Window};
 use std::f32::consts::PI;
 use crate::player::Player;
+use crate::audio::AudioPlayer;
 
-pub fn process_events(window: &Window, player: &mut Player, maze: &Vec<Vec<char>>, block_size: usize) {
+pub fn process_events(window: &Window, player: &mut Player, maze: &Vec<Vec<char>>, block_size: usize, steps_player: &AudioPlayer) {
     const MOVE_SPEED: f32 = 0.1;
     const ROTATION_SPEED: f32 = PI / 30.0;
+    let mut moved = false;
 
-    if window.is_key_down(Key::Left) {
+    // Rotación del jugador con A y D
+    if window.is_key_down(Key::A) {
         player.a -= ROTATION_SPEED;
     }
-    if window.is_key_down(Key::Right) {
+    if window.is_key_down(Key::D) {
         player.a += ROTATION_SPEED;
     }
 
     let mut next_pos_x = player.pos.x;
     let mut next_pos_y = player.pos.y;
 
-    if window.is_key_down(Key::Up) {
-        // Intentar mover hacia adelante en la dirección de vista
+    // Movimiento del jugador con W y S
+    if window.is_key_down(Key::W) {
         next_pos_x += player.a.cos() * MOVE_SPEED;
         next_pos_y += player.a.sin() * MOVE_SPEED;
+        moved = true;  // El jugador se ha movido
     }
-    if window.is_key_down(Key::Down) {
-        // Intentar mover hacia atrás en la dirección opuesta a la vista
+    if window.is_key_down(Key::S) {
         next_pos_x -= player.a.cos() * MOVE_SPEED;
         next_pos_y -= player.a.sin() * MOVE_SPEED;
+        moved = true;  // El jugador se ha movido
     }
 
     // Convertir la siguiente posición en índices de celda
@@ -36,5 +40,12 @@ pub fn process_events(window: &Window, player: &mut Player, maze: &Vec<Vec<char>
         // Si no es una pared, actualizamos la posición del jugador
         player.pos.x = next_pos_x;
         player.pos.y = next_pos_y;
+    }
+
+    // Reproducir o pausar el sonido de los pasos dependiendo si el jugador se mueve o no
+    if moved {
+        steps_player.play();  // Reproducir sonido de pasos si el jugador se mueve
+    } else {
+        steps_player.pause();  // Pausar sonido de pasos si el jugador no se mueve
     }
 }
