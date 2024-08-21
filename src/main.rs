@@ -27,6 +27,7 @@ static SKY: Lazy<Arc<Texture>> = Lazy::new(|| Arc::new(Texture::new("sprites/sky
 static CHARACTER: Lazy<Arc<Texture>> = Lazy::new(|| Arc::new(Texture::new("sprites/ghastSprite.jpg")));
 static POKE_CENTER: Lazy<Arc<Texture>> = Lazy::new(|| Arc::new(Texture::new("sprites/centroPoke.png")));
 static INTRO_SPRITE: Lazy<Arc<Texture>> = Lazy::new(|| Arc::new(Texture::new("sprites/introSprite.png")));
+static MEDALLA_SPRITE: Lazy<Arc<Texture>> = Lazy::new(|| Arc::new(Texture::new("sprites/medallaSprite.png")));
 
 fn cell_to_texture_color(wall_type: char, _is_vertical: bool, tx: f32, ty: f32) -> u32 {
     match wall_type {
@@ -286,6 +287,72 @@ fn render_welcome_screen(framebuffer: &mut Vec<u32>) {
     render_text(framebuffer, controls_text, small_text_x, offset_y + 360, small_scale, color);
 }
 
+fn render_success_screen(framebuffer: &mut Vec<u32>) {
+    // Establecer un fondo negro
+    for y in 0..HEIGHT {
+        for x in 0..WIDTH {
+            framebuffer[y * WIDTH + x] = 0x000000;
+        }
+    }
+
+    // Cargar la imagen y calcular la escala para mantener la relación de aspecto
+    let medalla_width = MEDALLA_SPRITE.width;
+    let medalla_height = MEDALLA_SPRITE.height;
+
+    let scale_x = WIDTH as f32 / medalla_width as f32;
+    let scale_y = HEIGHT as f32 / medalla_height as f32;
+    let scale = scale_x.min(scale_y);
+
+    let scaled_width = (medalla_width as f32 * scale) as usize;
+    let scaled_height = (medalla_height as f32 * scale) as usize;
+
+    let offset_x = (WIDTH.saturating_sub(scaled_width)) / 2;
+    let offset_y = (HEIGHT.saturating_sub(scaled_height + 200)) / 2;
+
+    for y in 0..scaled_height {
+        for x in 0..scaled_width {
+            let tx = (x as f32 / scaled_width as f32 * medalla_width as f32) as u32;
+            let ty = (y as f32 / scaled_height as f32 * medalla_height as f32) as u32;
+            let color = MEDALLA_SPRITE.get_pixel_color(tx, ty);
+
+            // Verificar límites para evitar desbordamiento
+            if y + offset_y < HEIGHT && x + offset_x < WIDTH {
+                framebuffer[(y + offset_y) * WIDTH + (x + offset_x)] = color;
+            }
+        }
+    }
+
+    // Definir escalas para diferentes tamaños de texto
+    let large_scale = Scale::uniform(30.0);
+    let medium_scale = Scale::uniform(16.0);
+    let color = 0xFFD700;
+
+    let success_text = "¡Felicidades!";
+    let message_text = "Por completar el laberinto, toma esta Medalla Arcoíris";
+    let message_text2 = "¡Te la has ganado!";
+    let exit_text = "Presiona 'ESC' para salir";
+
+    // Simplificar centrado de texto calculando el ancho real del texto
+    let success_text_width = success_text.len() as f32 * large_scale.x;
+    let message_text_width = message_text.len() as f32 * medium_scale.x;
+    let message_text2_width = message_text2.len() as f32 * medium_scale.x;
+    let exit_text_width = exit_text.len() as f32 * medium_scale.x;
+
+    // Cálculo seguro de las posiciones
+    let success_text_x = (WIDTH as f32 - success_text_width) / 2.0;
+    render_text(framebuffer, success_text, success_text_x as usize, offset_y + 20, large_scale, color);
+
+    let message_text_x = (WIDTH as f32 - message_text_width) / 2.0;
+    render_text(framebuffer, message_text, message_text_x as usize, offset_y + 100, medium_scale, color);
+
+    let message_text2_x = (WIDTH as f32 - message_text2_width) / 2.0;
+    render_text(framebuffer, message_text2, message_text2_x as usize, offset_y + 140, medium_scale, color);
+
+    let exit_text_x = (WIDTH as f32 - exit_text_width) / 2.0;
+    render_text(framebuffer, exit_text, exit_text_x as usize, offset_y + 550, medium_scale, color);
+}
+
+
 fn render2d(framebuffer: &mut Vec<u32>, maze: &Vec<Vec<char>>, block_size: usize, player: &Player) {
     for (row, line) in maze.iter().enumerate() {
         for (col, &cell) in line.iter().enumerate() {
@@ -395,11 +462,11 @@ fn main() {
     let mut framebuffer: Vec<u32> = vec![0; WIDTH * HEIGHT];
     let block_size = 80;
 
-    // Render the welcome screen
+    // Renderizar la pantalla de bienvenida
     render_welcome_screen(&mut framebuffer);
     window.update_with_buffer(&framebuffer, WIDTH, HEIGHT).unwrap();
 
-    // Wait for the user to press Enter
+    // Esperar a que el usuario pulse Enter
     while window.is_open() && !window.is_key_down(Key::Enter) {
         window.update();
         std::thread::sleep(Duration::from_millis(16));
@@ -436,52 +503,78 @@ fn main() {
     let mut frame_count = 0;
     let mut fps_text = String::new();
 
+    // Definir la posición del CentroPokemon (meta)
+    let goal_position = na::Vector2::new(5.0, 5.0);
+    let mut game_completed = false;
+
     while window.is_open() && !window.is_key_down(Key::Escape) {
         let frame_start_time = Instant::now();
 
-        process_events(&window, &mut player, &maze, block_size, &steps_sound);
+        // Solo procesar eventos y actualizar si el juego no ha sido completado
+        if !game_completed {
+            process_events(&window, &mut player, &maze, block_size, &steps_sound);
 
-        framebuffer.iter_mut().for_each(|pixel| *pixel = 0);
-        let mut z_buffer: Vec<f32> = vec![std::f32::MAX; WIDTH];
+            framebuffer.iter_mut().for_each(|pixel| *pixel = 0);
+            let mut z_buffer: Vec<f32> = vec![std::f32::MAX; WIDTH];
 
-        if mode == "2D" {
-            render2d(&mut framebuffer, &maze, block_size, &player);
-        } else {
-            render3d(&mut framebuffer, &maze, &player, block_size as f32, &mut z_buffer, &enemy_positions);
-        }
-
-        // Calcular FPS
-        frame_count += 1;
-        let current_time = Instant::now();
-        let elapsed = current_time.duration_since(last_time);
-
-        if elapsed >= std::time::Duration::from_secs(1) {
-            let fps = frame_count as f64 / elapsed.as_secs_f64();
-            fps_text = format!("FPS: {:.0}", fps);
-            last_time = current_time;
-            frame_count = 0;
-        }
-
-        let scale = Scale::uniform(24.0);
-        let text_width = 200;
-        let fps_x = WIDTH.saturating_sub(text_width) - 10;
-        let fps_y = 10;
-        render_text(&mut framebuffer, &fps_text, fps_x, fps_y, scale, 0x000000);
-
-        window
-            .update_with_buffer(&framebuffer, WIDTH, HEIGHT).unwrap();
-
-        if window.is_key_down(Key::M) {
-            mode = if mode == "2D" { "3D" } else { "2D" };
-        }
-
-        let frame_end_time = Instant::now();
-        let frame_duration_actual = frame_end_time.duration_since(frame_start_time);
-        if frame_duration_actual < std::time::Duration::from_millis(16) {
-            let sleep_duration = std::time::Duration::from_millis(16) - frame_duration_actual;
-            if sleep_duration > std::time::Duration::from_millis(0) {
-                std::thread::sleep(sleep_duration);
+            if mode == "2D" {
+                render2d(&mut framebuffer, &maze, block_size, &player);
+            } else {
+                render3d(&mut framebuffer, &maze, &player, block_size as f32, &mut z_buffer, &enemy_positions);
             }
+
+            // Calcular FPS
+            frame_count += 1;
+            let current_time = Instant::now();
+            let elapsed = current_time.duration_since(last_time);
+
+            if elapsed >= std::time::Duration::from_secs(1) {
+                let fps = frame_count as f64 / elapsed.as_secs_f64();
+                fps_text = format!("FPS: {:.0}", fps);
+                last_time = current_time;
+                frame_count = 0;
+            }
+
+            // Dibujar FPS
+            let scale = Scale::uniform(24.0);
+            let text_width = 200;
+            let fps_x = WIDTH.saturating_sub(text_width) - 10;
+            let fps_y = 10;
+            render_text(&mut framebuffer, &fps_text, fps_x, fps_y, scale, 0x000000);
+
+            // Verificar si el jugador ha alcanzado la meta
+            if (player.pos - goal_position).norm() < 0.5 {
+                println!("¡Meta alcanzada!");
+                game_completed = true;
+            }
+
+            window.update_with_buffer(&framebuffer, WIDTH, HEIGHT).unwrap();
+
+            if window.is_key_down(Key::M) {
+                mode = if mode == "2D" { "3D" } else { "2D" };
+            }
+
+            let frame_end_time = Instant::now();
+            let frame_duration_actual = frame_end_time.duration_since(frame_start_time);
+            if frame_duration_actual < std::time::Duration::from_millis(16) {
+                let sleep_duration = std::time::Duration::from_millis(16) - frame_duration_actual;
+                if sleep_duration > std::time::Duration::from_millis(0) {
+                    std::thread::sleep(sleep_duration);
+                }
+            }
+        } else {
+            // Si el juego se ha completado, renderizar la pantalla de éxito
+            println!("Renderizando pantalla de éxito...");
+            render_success_screen(&mut framebuffer);
+            window.update_with_buffer(&framebuffer, WIDTH, HEIGHT).unwrap();
+            println!("Esperando que el jugador presione 'ESC'...");
+
+            // Esperar a que el jugador presione 'ESC' para salir
+            while window.is_open() && !window.is_key_down(Key::Escape) {
+                window.update();
+                std::thread::sleep(Duration::from_millis(16));
+            }
+            break;  // Salir del bucle principal después de mostrar la pantalla de éxito
         }
     }
 }
