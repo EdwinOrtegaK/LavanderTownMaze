@@ -25,11 +25,13 @@ static WALL2: Lazy<Arc<Texture>> = Lazy::new(|| Arc::new(Texture::new("sprites/c
 static FLOOR: Lazy<Arc<Texture>> = Lazy::new(|| Arc::new(Texture::new("sprites/floorSprite.png")));
 static SKY: Lazy<Arc<Texture>> = Lazy::new(|| Arc::new(Texture::new("sprites/skySprite.png")));
 static CHARACTER: Lazy<Arc<Texture>> = Lazy::new(|| Arc::new(Texture::new("sprites/ghastSprite.jpg")));
+static POKE_CENTER: Lazy<Arc<Texture>> = Lazy::new(|| Arc::new(Texture::new("sprites/centroPoke.png")));
 
 fn cell_to_texture_color(wall_type: char, _is_vertical: bool, tx: f32, ty: f32) -> u32 {
     match wall_type {
         '|' => WALL1.get_pixel_color((tx * WALL1.width as f32) as u32, (ty * WALL1.height as f32) as u32),
         '-' => WALL2.get_pixel_color((tx * WALL2.width as f32) as u32, (ty * WALL2.height as f32) as u32),
+        'g' => POKE_CENTER.get_pixel_color((tx * POKE_CENTER.width as f32) as u32, (ty * POKE_CENTER.height as f32) as u32),
         _ => WALL1.get_pixel_color((tx * WALL1.width as f32) as u32, (ty * WALL1.height as f32) as u32),
     }
 }
@@ -124,7 +126,6 @@ fn render_minimap(framebuffer: &mut Vec<u32>, maze: &Vec<Vec<char>>, player: &Pl
             let color = match cell {
                 '+' | '-' | '|' => 0xFFFFFF, // Color blanco para las paredes
                 'p' => 0xFF0000, // Rojo para el punto de inicio
-                'g' => 0x00FF00, // Verde para el punto de meta
                 _ => 0x000000,   // Negro para el espacio vacío
             };
 
