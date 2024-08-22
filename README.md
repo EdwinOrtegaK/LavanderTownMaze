@@ -18,6 +18,10 @@
 - **D**: Rotar a la Derecha
 - **ESC**: Salir del Juego
 
+## Demo en Video
+
+Mira una demostración de la funcionalidad del juego en este [video de YouTube](https://youtu.be/XbAgbnl5aQ4).
+
 ## Cómo Ejecutar
 
 1. **Clona el repositorio**:
