@@ -549,6 +549,8 @@ fn main() {
             // Verificar si el jugador ha alcanzado la meta
             for goal_position in &goal_area {
                 if (player.pos - *goal_position).norm() < 0.5 {
+                    background_music.pause();
+                    steps_sound.pause();
                     game_completed = true;
                     println!("¡Meta alcanzada!");
                     break;

@@ -4,8 +4,8 @@ use crate::player::Player;
 use crate::audio::AudioPlayer;
 
 pub fn process_events(window: &Window, player: &mut Player, maze: &Vec<Vec<char>>, block_size: usize, steps_player: &AudioPlayer) {
-    const MOVE_SPEED: f32 = 0.1;
-    const ROTATION_SPEED: f32 = PI / 30.0;
+    const MOVE_SPEED: f32 = 0.05;
+    const ROTATION_SPEED: f32 = PI / 45.0;
     let mut moved = false;
 
     // Rotación del jugador con A y D
